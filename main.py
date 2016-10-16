@@ -1,8 +1,9 @@
 import configparser
 import daemon
 import logging
-import os
+import signal
 import sys
+import listener
 from os import access, R_OK
 from os.path import isfile
 from argparse import ArgumentParser
@@ -11,7 +12,7 @@ from argparse import ArgumentParser
 # TODO: Set up email and remote logging
 
 DEFAULT_CONFIG = 'config.ini'
-DEFAULT_LOGFILE = 'log'
+DEFAULT_LOGFILE = 'watcher.log'
 DEFAULT_CONSOLE_VERBOSITY = logging.DEBUG
 DEFAULT_LOGFILE_VERBOSITY = logging.INFO
 DEFAULT_HOSTNAME = ''
@@ -70,6 +71,7 @@ def get_args():
 def spawn_daemon(file_handlers=None):
     context = daemon.DaemonContext(working_directory=".",
                                    files_preserve=file_handlers)
+    context.signal_map = { signal.SIGTERM: halt }
     context.open()
 
 
@@ -95,6 +97,11 @@ def merge_two_dicts(x, y):
     z = x.copy()
     z.update(y)
     return z
+
+
+def halt(signum, frame):
+    logging.getLogger(__name__).warn("Received shutdown signal")
+    listener.halt()
 
 
 def setup_logger(options):
@@ -133,11 +140,11 @@ def main():
     parser.read(path)
     options = merge_two_dicts(dict(parser.items('watcher')), vars(args))
     logging_files = setup_logger(options)
+    logging.info("Started Watcher")
     logging.getLogger(__name__).log(logging.DEBUG, "Set up logging")
     if options['daemon']:
         spawn_daemon(file_handlers=logging_files)
         logging.getLogger(__name__).log(logging.INFO, "Split off daemon")
-    import listener
     listener.setup(options)
 
 

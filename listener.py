@@ -2,10 +2,13 @@ import socket
 import ssl
 
 
+terminate = False
+
+
 def do_stuff(connection):
     with open("servertest.h264", "wb") as file:
         data = connection.recv(1024)
-        while data:
+        while data and not terminate:
             file.write(data)
             data = connection.recv(1024)
 
@@ -27,7 +30,7 @@ def setup(config):
     sock.bind((hostname, int(port)))
     sock.listen(5)
     print("Bound socket")
-    while True:
+    while not terminate:
         newsocket, fromaddr = sock.accept()
         connection = sslcontext.wrap_socket(newsocket, server_side=True)
 
@@ -36,3 +39,8 @@ def setup(config):
         finally:
             connection.shutdown(socket.SHUT_RDWR)
             connection.close()
+
+
+def halt():
+    global terminate
+    terminate = True
