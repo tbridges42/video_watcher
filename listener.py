@@ -12,12 +12,12 @@ def do_stuff(connection):
 
 def setup(config):
     print("In setup")
-    hostname = config['watcher']['hostname']
+    hostname = config['hostname']
     if not hostname:
         hostname = ''
-    port = config['watcher']['port']
-    certfile = config['watcher']['cert']
-    keyfile = config['watcher']['key']
+    port = config['port']
+    certfile = config['cert']
+    keyfile = config['key']
     print(hostname + ":" + port)
     sslcontext = ssl.SSLContext(ssl.PROTOCOL_SSLv23)
     sslcontext.options |= ssl.OP_NO_SSLv2

@@ -80,6 +80,16 @@ def create_config(path, parser):
         parser.write(configfile)
 
 
+def merge_two_dicts(x, y):
+    """
+    Given two dicts, merge them into a new dict as a shallow copy.
+    """
+    y = {k: v for k, v in y.items() if v is not None}
+    z = x.copy()
+    z.update(y)
+    return z
+
+
 def main():
     args = get_args()
     parser = configparser.ConfigParser()
@@ -87,10 +97,11 @@ def main():
     if not (isfile(path) and access(path, R_OK)):
         create_config(path, parser)
     parser.read(path)
-    if args.daemon:
+    options = merge_two_dicts(dict(parser.items('watcher')), vars(args))
+    if options['daemon']:
         spawn_daemon()
     import listener
-    listener.setup(parser)
+    listener.setup(options)
 
 
 if __name__ == '__main__':
