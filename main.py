@@ -14,18 +14,28 @@ def get_args():
 
 
 def spawn_daemon():
-    context = daemon.DaemonContext()
+    print("getting context")
+    out = open("watcher.log", "w+")
+    context = daemon.DaemonContext(stdout=out, stderr=out, working_directory="/home/kodi/")
     # TODO: set up daemon parameters
+    print("opening context")
     context.open()
-    pass
+    print("In daemon")
 
 
 def create_config(path, parser):
     # TODO: Create default config
-    pass
+    parser['watcher'] = {}
+    parser['watcher']['hostname'] = ""
+    parser['watcher']['port'] = "9191"
+    parser['watcher']['key'] = "server.key"
+    parser['watcher']['cert'] = "server.crt"
+    with open(path, 'w') as configfile:
+        parser.write(configfile)
 
 
-if __name__ == '__main__':
+def main():
+    print("starting")
     args = get_args()
     parser = configparser.ConfigParser()
     path = args.config
@@ -33,5 +43,11 @@ if __name__ == '__main__':
         create_config(path, parser)
     parser.read(path)
     if args.daemon:
+        print("spawning")
         spawn_daemon()
-    # Do stuff
+    import listener
+    listener.setup(parser)
+
+
+if __name__ == '__main__':
+    main()
