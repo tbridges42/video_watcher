@@ -1,6 +1,8 @@
 import configparser
 import daemon
 import logging
+import os
+import sys
 from os import access, R_OK
 from os.path import isfile
 from argparse import ArgumentParser
@@ -9,8 +11,8 @@ from argparse import ArgumentParser
 # TODO: Set up email and remote logging
 
 DEFAULT_CONFIG = 'config.ini'
-DEFAULT_LOGFILE = '/var/log/watcher/log'
-DEFAULT_CONSOLE_VERBOSITY = logging.ERROR
+DEFAULT_LOGFILE = 'log'
+DEFAULT_CONSOLE_VERBOSITY = logging.DEBUG
 DEFAULT_LOGFILE_VERBOSITY = logging.INFO
 DEFAULT_HOSTNAME = ''
 DEFAULT_PORT = "9191"
@@ -25,14 +27,20 @@ class StreamToLogger(object):
     <http://www.electricmonk.nl/log/2011/08/14/redirect-stdout-and-stderr-to-a-logger-in-python/>
     """
 
-    def __init__(self, logger, log_level=logging.INFO):
-        self.logger = logger
+    def __init__(self, mylogger, log_level=logging.INFO):
+        self.logger = mylogger
         self.log_level = log_level
         self.linebuf = ''
 
     def write(self, buf):
         for line in buf.rstrip().splitlines():
             self.logger.log(self.log_level, line.rstrip())
+
+    def flush(self):
+        pass
+
+    def fileno(self):
+        return 0
 
 
 def get_args():
@@ -42,12 +50,11 @@ def get_args():
     argparser.add_argument('-c', '--config', default=DEFAULT_CONFIG, help="Define a custom config file.")
     argparser.add_argument('-d', '--daemon', action='store_true', help="Spawn a daemon.")
     # TODO: Implement
-    argparser.add_argument('-l', '--logfile', default=DEFAULT_LOGFILE, help="Location to log messages.")
+    argparser.add_argument('-l', '--logfile', help="Location to log messages.")
     # TODO: Implement
     argparser.add_argument('-v', '--verbose', action='count')
     # TODO: Implement
-    argparser.add_argument('-H', '--host', default=DEFAULT_HOSTNAME,
-                           help="The server hostname. If not present, will use the system hostname")
+    argparser.add_argument('-H', '--host', help="The server hostname.")
     # TODO: Implement
     argparser.add_argument('-p', '--port', help="The port to use.")
     # TODO: Implement
@@ -60,10 +67,8 @@ def get_args():
     return argparser.parse_args()
 
 
-def spawn_daemon(file_handlers=None, out="/dev/null", err="/dev/null"):
-    context = daemon.DaemonContext(stdout=out,
-                                   stderr=err,
-                                   working_directory="/home/kodi/",
+def spawn_daemon(file_handlers=None):
+    context = daemon.DaemonContext(working_directory=".",
                                    files_preserve=file_handlers)
     context.open()
 
@@ -71,11 +76,13 @@ def spawn_daemon(file_handlers=None, out="/dev/null", err="/dev/null"):
 def create_config(path, parser):
     # TODO: Create default config
     parser['watcher'] = {}
-    parser['watcher']['hostname'] = ""
-    parser['watcher']['port'] = "9191"
+    parser['watcher']['logfile'] = DEFAULT_LOGFILE
+    parser['watcher']['logfile_level'] = "INFO"
+    parser['watcher']['hostname'] = DEFAULT_HOSTNAME
+    parser['watcher']['port'] = DEFAULT_PORT
     parser['watcher']['ssl'] = "True"
-    parser['watcher']['key'] = "server.key"
-    parser['watcher']['cert'] = "server.crt"
+    parser['watcher']['key'] = DEFAULT_KEY
+    parser['watcher']['cert'] = DEFAULT_CERT
     with open(path, 'w') as configfile:
         parser.write(configfile)
 
@@ -90,16 +97,46 @@ def merge_two_dicts(x, y):
     return z
 
 
+def setup_logger(options):
+    logger = logging.getLogger(__name__)
+    logger.setLevel(logging.DEBUG)
+    formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
+
+    fh = logging.FileHandler(options['logfile'])
+    fh.setLevel(logging.DEBUG)
+    fh.setFormatter(formatter)
+
+    ch = logging.StreamHandler()
+    ch.setLevel(logging.DEBUG)
+    ch.setFormatter(formatter)
+
+    logger.addHandler(fh)
+    logger.addHandler(ch)
+
+    logger.log(logging.DEBUG, "Logger created")
+
+    sys.stdout = StreamToLogger(logger, logging.DEBUG)
+    sys.stderr = StreamToLogger(logger, logging.DEBUG)
+    logger.log(logging.DEBUG, "stdout and stderr routed to logger")
+
+    return [fh.stream]
+
+
 def main():
     args = get_args()
     parser = configparser.ConfigParser()
     path = args.config
     if not (isfile(path) and access(path, R_OK)):
-        create_config(path, parser)
+        print(path + " is not a valid config file. Creating " + DEFAULT_CONFIG)
+        create_config(DEFAULT_CONFIG, parser)
+        path = DEFAULT_CONFIG
     parser.read(path)
     options = merge_two_dicts(dict(parser.items('watcher')), vars(args))
+    logging_files = setup_logger(options)
+    logging.getLogger(__name__).log(logging.DEBUG, "Set up logging")
     if options['daemon']:
-        spawn_daemon()
+        spawn_daemon(file_handlers=logging_files)
+        logging.getLogger(__name__).log(logging.INFO, "Split off daemon")
     import listener
     listener.setup(options)
 
