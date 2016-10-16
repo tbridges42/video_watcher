@@ -1,3 +1,4 @@
+import logging
 import socket
 import ssl
 
@@ -14,14 +15,13 @@ def do_stuff(connection):
 
 
 def setup(config):
-    print("In setup")
+    logging.debug("In setup")
     hostname = config['hostname']
     if not hostname:
         hostname = ''
     port = config['port']
     certfile = config['cert']
     keyfile = config['key']
-    print(hostname + ":" + port)
     sslcontext = ssl.SSLContext(ssl.PROTOCOL_SSLv23)
     sslcontext.options |= ssl.OP_NO_SSLv2
     sslcontext.options |= ssl.OP_NO_SSLv3
@@ -29,7 +29,10 @@ def setup(config):
     sock = socket.socket()
     sock.bind((hostname, int(port)))
     sock.listen(5)
-    print("Bound socket")
+    if hostname:
+        logging.info("Listening on " + hostname + ":" + port)
+    else:
+        logging.info("Listening on port " + port)
     while not terminate:
         newsocket, fromaddr = sock.accept()
         connection = sslcontext.wrap_socket(newsocket, server_side=True)
@@ -44,3 +47,4 @@ def setup(config):
 def halt():
     global terminate
     terminate = True
+    logging.getLogger('watcher').info("Terminating server")

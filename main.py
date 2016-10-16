@@ -100,14 +100,15 @@ def merge_two_dicts(x, y):
 
 
 def halt(signum, frame):
-    logging.getLogger(__name__).warn("Received shutdown signal")
+    logging.getLogger('watcher').warning("Received shutdown signal")
     listener.halt()
+    logging.getLogger('watcher').info("==================================\n")
 
 
 def setup_logger(options):
-    logger = logging.getLogger(__name__)
+    logger = logging.getLogger('watcher')
     logger.setLevel(logging.DEBUG)
-    formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
+    formatter = logging.Formatter('%(asctime)s - %(levelname)8s - %(message)s')
 
     fh = logging.FileHandler(options['logfile'])
     fh.setLevel(logging.DEBUG)
@@ -120,11 +121,11 @@ def setup_logger(options):
     logger.addHandler(fh)
     logger.addHandler(ch)
 
-    logger.log(logging.DEBUG, "Logger created")
+    logger.debug("Logger created")
 
-    sys.stdout = StreamToLogger(logger, logging.DEBUG)
-    sys.stderr = StreamToLogger(logger, logging.DEBUG)
-    logger.log(logging.DEBUG, "stdout and stderr routed to logger")
+    # sys.stdout = StreamToLogger(logger, logging.DEBUG)
+    # sys.stderr = StreamToLogger(logger, logging.DEBUG)
+    logger.debug("stdout and stderr routed to logger")
 
     return [fh.stream]
 
@@ -140,11 +141,12 @@ def main():
     parser.read(path)
     options = merge_two_dicts(dict(parser.items('watcher')), vars(args))
     logging_files = setup_logger(options)
-    logging.info("Started Watcher")
-    logging.getLogger(__name__).log(logging.DEBUG, "Set up logging")
+    logging.getLogger('watcher').info("==================================")
+    logging.getLogger('watcher').info("Started Watcher")
+    logging.getLogger('watcher').info("Set up logging")
     if options['daemon']:
         spawn_daemon(file_handlers=logging_files)
-        logging.getLogger(__name__).log(logging.INFO, "Split off daemon")
+        logging.getLogger('watcher').info("Split off daemon")
     listener.setup(options)
 
 
