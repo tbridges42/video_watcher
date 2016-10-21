@@ -20,6 +20,8 @@ DEFAULT_PORT = "9191"
 DEFAULT_CERT = ""
 DEFAULT_KEY = ""
 
+logger = None
+
 
 class StreamToLogger(object):
     """
@@ -50,20 +52,15 @@ def get_args():
                                epilog="Command line options override values in the config file")
     argparser.add_argument('-c', '--config', default=DEFAULT_CONFIG, help="Define a custom config file.")
     argparser.add_argument('-d', '--daemon', action='store_true', help="Spawn a daemon.")
-    # TODO: Implement
     argparser.add_argument('-l', '--logfile', help="Location to log messages.")
     # TODO: Implement
     argparser.add_argument('-v', '--verbose', action='count')
-    # TODO: Implement
     argparser.add_argument('-H', '--host', help="The server hostname.")
-    # TODO: Implement
     argparser.add_argument('-p', '--port', help="The port to use.")
     # TODO: Implement
     # SSL is set via option list to allow for a None value, in which case we read from the config file
     argparser.add_argument('-s', '--ssl', choices=['y', 'n'], help="Require SSL.")
-    # TODO: Implement
     argparser.add_argument('-C', '--cert', help="SSL cert file to use.")
-    # TODO: Implement
     argparser.add_argument('-k', '--key', help="SSL key file to use.")
     return argparser.parse_args()
 
@@ -71,8 +68,9 @@ def get_args():
 def spawn_daemon(file_handlers=None):
     context = daemon.DaemonContext(working_directory=".",
                                    files_preserve=file_handlers)
-    context.signal_map = { signal.SIGTERM: halt }
+    context.signal_map = {signal.SIGTERM: halt}
     context.open()
+    logger.info("Split off daemon")
 
 
 def create_config(path, parser):
@@ -100,11 +98,13 @@ def merge_two_dicts(x, y):
 
 
 def halt(signum, frame):
-    logging.getLogger('watcher').warning("Received shutdown signal")
+    logger.warning("Received shutdown signal")
     listener.halt()
+    log_finish()
 
 
 def setup_logger(options):
+    global logger
     logger = logging.getLogger('watcher')
     logger.setLevel(logging.DEBUG)
     formatter = logging.Formatter('%(asctime)15s : %(levelname)8s : %(message)s')
@@ -129,23 +129,38 @@ def setup_logger(options):
     return [fh.stream]
 
 
-def main():
+def log_start(options):
+    logging_files = setup_logger(options)
+    logger.info("==============================")
+    logger.info("Started Watcher")
+    logger.info("Logging initialized")
+    return logging_files
+
+
+def log_finish():
+    logger.info("Halting Watcher")
+    logger.info("==============================")
+    logging.shutdown(logger.handlers)
+
+
+def get_options():
     args = get_args()
     parser = configparser.ConfigParser()
     path = args.config
     if not (isfile(path) and access(path, R_OK)):
+        # Print to console because logger is not yet initialized
         print(path + " is not a valid config file. Creating " + DEFAULT_CONFIG)
         create_config(DEFAULT_CONFIG, parser)
         path = DEFAULT_CONFIG
     parser.read(path)
-    options = merge_two_dicts(dict(parser.items('watcher')), vars(args))
-    logging_files = setup_logger(options)
-    logging.getLogger('watcher').info("==================================")
-    logging.getLogger('watcher').info("Started Watcher")
-    logging.getLogger('watcher').info("Set up logging")
+    return merge_two_dicts(dict(parser.items('watcher')), vars(args))
+
+
+def main():
+    options = get_options()
+    logging_files = log_start(options)
     if options['daemon']:
         spawn_daemon(file_handlers=logging_files)
-        logging.getLogger('watcher').info("Split off daemon")
     listener.setup(options)
 
 
