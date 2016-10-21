@@ -1,17 +1,35 @@
 import logging
+import multiprocessing
+import os
 import socket
 import ssl
-
+import datetime
 
 terminate = False
+logger = logging.getLogger("watcher")
 
 
-def do_stuff(connection):
-    with open("servertest.h264", "wb") as file:
-        data = connection.recv(1024)
-        while data and not terminate:
-            file.write(data)
+def handle(connection):
+    try:
+        logger.debug("In do_stuff")
+        datestamp = datetime.datetime.now().isoformat()
+        logger.debug("Got datetime")
+        with open(datestamp + ".h264", "wb") as file:
+            logger.debug("Opened file")
             data = connection.recv(1024)
+            logger.debug("Received first chunk")
+            while data and not terminate:
+                file.write(data)
+                data = connection.recv(1024)
+                logging.getLogger("watcher").debug("Receiving...")
+            stats = os.stat(file.fileno())
+            logging.getLogger("watcher").info("Wrote " + str(stats.st_size) + " bytes to " + file.name)
+    except:
+        logger.exception("Problem handling request")
+    finally:
+        connection.close()
+
+
 
 
 def setup(config):
@@ -30,21 +48,30 @@ def setup(config):
     sock.bind((hostname, int(port)))
     sock.listen(5)
     if hostname:
-        logging.info("Listening on " + hostname + ":" + port)
+        logging.getLogger('watcher').info("Listening on " + hostname + ":" + port)
     else:
-        logging.info("Listening on port " + port)
+        logging.getLogger('watcher').info("Listening on port " + port)
     while not terminate:
         newsocket, fromaddr = sock.accept()
+        logging.getLogger('watcher').info("Received connection")
         connection = sslcontext.wrap_socket(newsocket, server_side=True)
-
+        logging.getLogger('watcher').info("SSL established")
         try:
-            do_stuff(connection)
+            process = multiprocessing.Process(target=handle, args=(connection,))
+            process.daemon = True
+            process.start()
+        except Exception as error:
+            logging.getLogger('watcher').critical(error)
         finally:
-            connection.shutdown(socket.SHUT_RDWR)
-            connection.close()
+            logging.getLogger('watcher').info("Terminating server")
+            logging.getLogger('watcher').info("==================================\n")
+            logging.shutdown()
+            handlers = logger.handlers
+            for handler in handlers:
+                handler.close()
+                logger.removeHandler(handler)
 
 
 def halt():
     global terminate
     terminate = True
-    logging.getLogger('watcher').info("Terminating server")

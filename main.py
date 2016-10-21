@@ -102,7 +102,6 @@ def merge_two_dicts(x, y):
 def halt(signum, frame):
     logging.getLogger('watcher').warning("Received shutdown signal")
     listener.halt()
-    logging.getLogger('watcher').info("==================================\n")
 
 
 def setup_logger(options):
